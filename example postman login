@@ -1,0 +1,58 @@
+var url = pm.variables.get('localhost');
+const _dummy = setInterval(() => {}, 100000);
+
+function sendRequest(req) {
+    return new Promise((resolve, reject) => {
+        pm.sendRequest(req, (err, res) => {
+            if (err) {
+                return reject(err);
+            }
+
+            return resolve(res);
+        })
+    });
+}
+
+(async function main() {
+    const jar = pm.cookies.jar();
+   console.info("got cookie jar");
+
+    var clearCookies = () => { return new Promise((resolve, reject) => {
+    jar.clear(pm.variables.get("localhost"), function (error, res) {
+            if(error){
+                console.error(error);
+                return reject(error);
+            }
+
+            return resolve(res);            
+        });
+    });
+    }
+
+    await clearCookies();
+console.info("cleared cookie jar")
+
+
+    const getLoginResult = await sendRequest(`${url}/account/login`);
+ console.info("logged in")
+
+    var body = getLoginResult.text();
+    const html = cheerio(body);
+    var allInputs = html.find('input[name="__RequestVerificationToken"]');
+    var input = allInputs.first();
+    var token = input.val();
+    pm.environment.set('xsrf-token', token);
+    console.log("token:" + pm.environment.get('xsrf-token'));
+
+    await sendRequest({
+        url:`${url}/account/login?returnUrl=/`,
+        method: 'POST',
+        header: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Content-Type': 'application/x-www-form-urlencoded'
+            },
+        body:"Input.Email=" + pm.environment.get('user-email') + "&Input.Password=" + pm.environment.get('user-password') + "&__RequestVerificationToken=" + pm.environment.get('xsrf-token') + "&Input.RememberMe=false"
+        });
+
+    clearInterval(_dummy);
+})();
